@@ -29,7 +29,8 @@
             [frontend.ui :as ui]
             [frontend.util :as util]
             [frontend.util.pool :as pool]
-            [cljs.reader :refer [read-string]]
+            [cljs.reader :as reader]
+            [datascript.core :as d]
             [goog.object :as gobj]
             [lambdaisland.glogi :as log]
             [promesa.core :as p]))
@@ -151,21 +152,34 @@
   (js/window.addEventListener "online" handle-connection-change)
   (js/window.addEventListener "offline" handle-connection-change))
 
+(defn- transact-from-devtool! [conn transact-str]
+    (try
+      (d/transact conn (reader/read-string transact-str))
+      {:datalog-console.client.response/transact! :success}
+      (catch js/Error e {:error (gobj/get e "message")})))
+
 (defn enable-datalog-console
   "Enables datalog console in browser provided by https://github.com/homebaseio/datalog-console"
   []
   (js/document.documentElement.setAttribute "__datalog-console-remote-installed__" true)
   (.addEventListener js/window "message"
                      (fn [event]
-                       (let [conn (conn/get-conn)]
-                         (when-let [devtool-message (gobj/getValueByKeys event "data" ":datalog-console.client/devtool-message")]
-                           (let [msg-type (:type (read-string devtool-message))]
-                             (case msg-type
+                       (when-let [devtool-message (gobj/getValueByKeys event "data" ":datalog-console.client/devtool-message")]
+                         (let [msg-type (:type (reader/read-string devtool-message))
+                               conn (conn/get-conn false)]
+                           (case msg-type
 
-                               :datalog-console.client/request-whole-database-as-string
-                               (.postMessage js/window #js {":datalog-console.remote/remote-message" (pr-str conn)} "*")
+                             :datalog-console.client/request-whole-database-as-string
+                             (.postMessage js/window #js {":datalog-console.remote/remote-message" (pr-str @conn)} "*")
 
-                               nil)))))))
+                             :datalog-console.client/transact!
+                             (let [transact-result (transact-from-devtool! conn (:data (reader/read-string devtool-message)))]
+                               (.postMessage js/window #js {":datalog-console.remote/remote-message" (pr-str transact-result)} "*"))
+
+                             :datalog-console.client/request-integration-version
+                             (.postMessage js/window #js {":datalog-console.remote/remote-message" (pr-str {:version "0.3.0"})})
+
+                             nil))))))
 (defn- get-repos
   []
   (let [logged? (state/logged?)
