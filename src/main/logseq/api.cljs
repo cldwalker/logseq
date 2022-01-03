@@ -589,3 +589,6 @@
   []
   (p/let [_ (el/persist-dbs!)
           _ (reset! handler/triggered? true)]))
+
+(defn ^:export load-extension [path]
+  (ipc/ipc "loadExtension" path))

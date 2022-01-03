@@ -1,5 +1,5 @@
 (ns electron.handler
-  (:require ["electron" :refer [ipcMain dialog app autoUpdater]]
+  (:require ["electron" :refer [ipcMain dialog app autoUpdater session]]
             [cljs-bean.core :as bean]
             ["fs" :as fs]
             ["buffer" :as buffer]
@@ -253,6 +253,11 @@
 
 (defmethod handle :quitAndInstall []
   (.quitAndInstall autoUpdater))
+
+(defmethod handle :loadExtension [_ [_ path]]
+  (.loadExtension (.-defaultSession session)
+                  path
+                  #js {:allowFileAccess true}))
 
 (defmethod handle :default [args]
   (println "Error: no ipc handler for: " (bean/->js args)))
